@@ -2,18 +2,17 @@
 from __future__ import print_function
 
 from argparse import ArgumentParser, Namespace
-import atexit
-from commands import getstatusoutput
+from subprocess import getstatusoutput
 from glob import glob
 from os.path import dirname, join
 import re
-import os
 import sys
 
 from alibot_helpers.github_utilities import calculateMessageHash, github_token
 from alibot_helpers.github_utilities import setGithubStatus, parseGithubRef
 from alibot_helpers.github_utilities import GithubCachedClient, PickledCache
 from alibot_helpers.utilities import to_unicode
+
 
 def parse_args():
     parser = ArgumentParser()
@@ -82,6 +81,17 @@ def parse_args():
     return args
 
 
+def filterLog(log, dest):
+    with open(log, 'r') as input:
+        d = open(dest, 'a')
+        d.writelines("<div class=\"fold\" >\n")
+        d.writelines("<header><h1>%s</h1></header>\n" % log)
+        d.writelines("<pre>\n")
+        d.writelines(line for line in input)
+        d.writelines("</pre>\n")
+        d.writelines("</div>\n")
+
+
 class Logs(object):
     def __init__(self, args, is_branch):
         self.work_dir = args.workDir
@@ -98,7 +108,8 @@ class Logs(object):
         self.find()
         self.grep()
         self.cat(self.full_log)
-        if self.is_branch: self.cat(self.full_log_latest, no_delete=True)
+        if self.is_branch:
+            self.cat(self.full_log_latest, no_delete=True)
         self.rsync(self.rsync_dest)
 
     def constructFullLogName(self, pr, latest=False):
@@ -110,13 +121,14 @@ class Logs(object):
         # Python's glob * matches at least one char
         search_paths = [join(self.work_dir, "BUILD/*latest*/log"),
                         join(self.work_dir, "BUILD/*latest/log")]
-        print("Searching all logs matching: %s" % ", ".join(search_paths), file=sys.stderr)
+        print("Searching all logs matching: %s" %
+              ", ".join(search_paths), file=sys.stderr)
         globbed = []
         for sp in search_paths:
             globbed.extend(glob(sp))
 
         suffix = ("latest" + "-" + self.develPrefix).strip("-")
-        logs = [x for x in globbed if dirname(x).endswith(suffix)]
+        logs = {x for x in globbed if dirname(x).endswith(suffix)}
 
         print("Found:\n%s" % "\n".join(logs), file=sys.stderr)
         self.logs = logs
@@ -143,16 +155,14 @@ class Logs(object):
         self.error_log = error_log
 
     def cat(self, tgtFile, no_delete=False):
-        cmd = "%s && mkdir -p `dirname copy-logs/%s`" % ("true" if no_delete else "rm -rf copy-logs", tgtFile)
+        cmd = "%s && mkdir -p `dirname copy-logs/%s`" % (
+            "true" if no_delete else "rm -rf copy-logs", tgtFile)
         err, out = getstatusoutput(cmd)
         if err:
             print(out, file=sys.stderr)
 
         for log in self.logs:
-            cmd = "cat %s >> copy-logs/%s" % (log, tgtFile)
-            print(cmd, file=sys.stderr)
-            err, out = getstatusoutput(cmd)
-            print(out, file=sys.stderr)
+            filterLog(log, "copy-logs/%s" % tgtFile)
 
     def rsync(self, dest):
         err, out = getstatusoutput("cd copy-logs && rsync -av ./ %s" % dest)
@@ -173,14 +183,15 @@ def handle_branch(cgh, pr, logs, args):
     if args.message:
         message += to_unicode(args.message)
     else:
-        message += "```\n%s\n```\nFull log [here](%s).\n" % (to_unicode(logs.error_log), to_unicode(logs.url))
+        message += "```\n%s\n```\nFull log [here](%s).\n" % (
+            to_unicode(logs.error_log), to_unicode(logs.url))
     messageSha = calculateMessageHash(message)
 
     ns = Namespace(commit=args.pr,
                    status=args.status + "/error",
                    message="",
                    url="")
-    setGithubStatus(cgh, ns)
+# setGithubStatus(cgh, ns)
     sys.exit(0)
 
 
@@ -194,7 +205,8 @@ def handle_pr_id(cgh, pr, logs, args):
     if args.message:
         message += args.message
     else:
-        message += "```\n%s\n```\nFull log [here](%s).\n" % (to_unicode(logs.error_log), to_unicode(logs.url))
+        message += "```\n%s\n```\nFull log [here](%s).\n" % (
+            to_unicode(logs.error_log), to_unicode(logs.url))
 
     if args.dry_run:
         # commit does not exist...
@@ -204,7 +216,8 @@ def handle_pr_id(cgh, pr, logs, args):
 
     # Set status
     ghStatus = "/success" if args.success else "/error"
-    ns = Namespace(commit=args.pr, status=args.status + ghStatus, message="", url=logs.url)
+    ns = Namespace(commit=args.pr, status=args.status +
+                   ghStatus, message="", url=logs.url)
     setGithubStatus(cgh, ns)
 
     # Comment if appropriate
@@ -231,7 +244,6 @@ def handle_pr_id(cgh, pr, logs, args):
             print("Found same comment for the same commit", file=sys.stderr)
             sys.exit(0)
 
-
     cgh.post(
         "repos/{repo_name}/issues/{pr_id}/comments",
         {"body": message},
@@ -254,15 +266,16 @@ def main():
     if not args.message:
         logs.parse()
 
-    cache = PickledCache('.cached-commits')
-    with GithubCachedClient(token=github_token(), cache=cache) as cgh:
-        # If the branch is not a PR, we should look for open issues
-        # for the branch. This should really folded as a special case
-        # of the PR case.
-        func = handle_branch if not pr.id.isdigit() else handle_pr_id
-        func(cgh, pr, logs, args)
+    # cache = PickledCache('.cached-commits')
+    # with GithubCachedClient(token=github_token(), cache=cache) as cgh:
+    #     # If the branch is not a PR, we should look for open issues
+    #     # for the branch. This should really folded as a special case
+    #     # of the PR case.
+    #     func = handle_branch if not pr.id.isdigit() else handle_pr_id
+    #     func(cgh, pr, logs, args)
 
-    cgh.printStats()
+    # cgh.printStats()
+
 
 if __name__ == "__main__":
     main()

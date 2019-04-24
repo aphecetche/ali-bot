@@ -1,0 +1,49 @@
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+.fold pre {
+  display: none;
+}
+.fold.open pre {
+  display: block;
+}
+h1 {
+  width: 80%;
+  font-size: 1.5rem;
+  display: inline-block;
+}
+
+button {
+  margin-right: 0.5rem;
+display: inline-block;
+align-items: center;
+background: transparent;
+width: 0;
+height: 0;
+padding: 0;
+border: 0;
+border-top: 0.7rem solid transparent;
+border-left: 1.0rem solid grey;
+border-bottom: 0.7rem solid transparent;
+}
+
+button.open {
+  margin-right: 0.5rem;
+display: inline-block;
+align-items: center;
+background: transparent;
+width: 0;
+height: 0;
+padding: 0;
+border: 0;
+border-right: 0.7rem solid transparent;
+border-top: 1.0rem solid grey;
+border-left: 0.7rem solid transparent;
+}
